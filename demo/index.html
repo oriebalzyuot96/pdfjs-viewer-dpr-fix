@@ -1,0 +1,30 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="/repo/build/components/pdf_viewer.css">
+<style>#viewerContainer { position: absolute; inset: 0; overflow: auto; }</style>
+</head>
+<body>
+<div id="viewerContainer"><div id="viewer" class="pdfViewer"></div></div>
+<script type="module">
+  import * as pdfjsLib from '/repo/build/generic/build/pdf.mjs';
+  globalThis.pdfjsLib = pdfjsLib;
+  pdfjsLib.GlobalWorkerOptions.workerSrc = '/repo/build/generic/build/pdf.worker.mjs';
+  const { EventBus, PDFViewer } = await import('/repo/build/components/pdf_viewer.mjs');
+
+  const eventBus = new EventBus();
+  const container = document.getElementById('viewerContainer');
+  const viewer = new PDFViewer({ container, eventBus });
+  window.renders = 0;
+  eventBus.on('pagerendered', () => window.renders++);
+  eventBus.on('pagesinit', () => { viewer.currentScaleValue = 'page-width'; });
+  const doc = await pdfjsLib.getDocument({ url: '/repo/test/pdfs/tracemonkey.pdf' }).promise;
+  viewer.setDocument(doc);
+  window.firstCanvasWidth = () => {
+    const c = document.querySelector('.page[data-page-number="1"] canvas');
+    return c ? { pixels: c.width, css: Math.round(c.getBoundingClientRect().width) } : null;
+  };
+</script>
+</body>
+</html>
