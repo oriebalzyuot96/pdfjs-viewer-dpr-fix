@@ -48,7 +48,7 @@ onResolutionChange();
 - **Cleaned up with the document.** `signal` comes from the viewer's per-document `#eventAC`, which `_resetView()` aborts when the document changes or closes.
 - **No change for Firefox or the default viewer.** `PDFViewerApplication` uses `PDFViewer` too, so the duplicate listener in `app.js` is removed.
 
-The full change is in [`viewer-resolution-change.patch`](viewer-resolution-change.patch) (+17 / −15 lines in `web/pdf_viewer.js` and `web/app.js`).
+The full change is in [`viewer-resolution-change.patch`](viewer-resolution-change.patch) (+17 / −15 lines in `web/pdf_viewer.js` and `web/app.js`), and the test in [`integration-test.patch`](integration-test.patch).
 
 ## Results
 
@@ -60,6 +60,8 @@ The full change is in [`viewer-resolution-change.patch`](viewer-resolution-chang
 | With the fix | 2280 px, redrawn for 3x (sharp) |
 
 The pdf.js unit tests pass with the fix: 1760 specs, 0 failures.
+
+The PR also adds an integration test (, "Re-render on device pixel ratio change"). It keeps the  media query lists the viewer creates, doubles , fires the  event on the latest one, and checks that page 1's canvas is redrawn at twice the width and that a query for the new ratio is registered for the next change. It passes in Chrome and Firefox; the test is in [](integration-test.patch).
 
 ## Reproduce it
 

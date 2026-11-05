@@ -1,0 +1,103 @@
+From f808dc923be7e8b61a407dbf2d67793bcbe5aa60 Mon Sep 17 00:00:00 2001
+From: Orieb Ghassab <62809321+oriebalzyuot96@users.noreply.github.com>
+Date: Thu, 5 Nov 2026 21:03:45 +0300
+Subject: [PATCH] Add an integration test for re-rendering on a device pixel
+ ratio change
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+The viewer keeps a `(resolution: …dppx)` media query and re-renders the
+pages when it changes. The test keeps the query lists the viewer creates,
+fires the "change" event with a doubled `devicePixelRatio`, and checks that
+the page canvas is redrawn at twice the width and that a new query at the
+new ratio is registered for the next change.
+---
+ test/integration/viewer_spec.mjs | 71 ++++++++++++++++++++++++++++++++
+ 1 file changed, 71 insertions(+)
+
+diff --git a/test/integration/viewer_spec.mjs b/test/integration/viewer_spec.mjs
+index dd5ff86..b67a9c1 100644
+--- a/test/integration/viewer_spec.mjs
++++ b/test/integration/viewer_spec.mjs
+@@ -503,6 +503,77 @@ describe("PDF viewer", () => {
+     });
+   });
+ 
++  describe("Re-render on device pixel ratio change", () => {
++    let pages;
++
++    beforeEach(async () => {
++      pages = await loadAndWait(
++        "tracemonkey.pdf",
++        `.page[data-page-number="1"] .textLayer .endOfContent`,
++        "page-width",
++        {
++          // Keep the `resolution` media queries registered by the viewer, so
++          // that the test can fire their "change" event: moving the window to
++          // another monitor can't be emulated the same way in every browser.
++          earlySetup: () => {
++            window.resolutionQueries = [];
++            const matchMedia = window.matchMedia.bind(window);
++            window.matchMedia = query => {
++              const mediaQueryList = matchMedia(query);
++              if (query.startsWith("(resolution:")) {
++                window.resolutionQueries.push({ query, mediaQueryList });
++              }
++              return mediaQueryList;
++            };
++          },
++        }
++      );
++    });
++
++    afterEach(async () => {
++      await closePages(pages);
++    });
++
++    it("must redraw the pages at the new pixel ratio", async () => {
++      await Promise.all(
++        pages.map(async ([browserName, page]) => {
++          const getCanvasWidth = () =>
++            page.evaluate(
++              () =>
++                document.querySelector(`.page[data-page-number="1"] canvas`)
++                  .width
++            );
++          const widthBefore = await getCanvasWidth();
++          const ratioBefore = await page.evaluate(
++            () => window.devicePixelRatio
++          );
++
++          const handle = await waitForPageRendered(page, 1);
++          await page.evaluate(ratio => {
++            window.devicePixelRatio = ratio * 2;
++            window.resolutionQueries
++              .at(-1)
++              .mediaQueryList.dispatchEvent(new Event("change"));
++          }, ratioBefore);
++          await awaitPromise(handle);
++
++          const widthAfter = await getCanvasWidth();
++          expect(Math.abs(widthAfter - widthBefore * 2))
++            .withContext(`In ${browserName}`)
++            .toBeLessThanOrEqual(2);
++
++          // The viewer must now listen for the next change, at the new ratio.
++          const lastQuery = await page.evaluate(
++            () => window.resolutionQueries.at(-1).query
++          );
++          expect(lastQuery)
++            .withContext(`In ${browserName}`)
++            .toEqual(`(resolution: ${ratioBefore * 2}dppx)`);
++        })
++      );
++    });
++  });
++
+   describe("Page background under the canvas (bug 2070624)", () => {
+     let pages;
+ 
+-- 
+2.55.0.windows.5
+
